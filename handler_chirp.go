@@ -66,6 +66,7 @@ func isChirpValid(chirp string) bool {
 
 	return len(chirp) <= maxChirpLength
 }
+
 func cleanProfaneWords(s string, profaneWords map[string]struct{}) string {
 	words := strings.Fields(s)
 	for index, word := range words {
@@ -75,4 +76,24 @@ func cleanProfaneWords(s string, profaneWords map[string]struct{}) string {
 		}
 	}
 	return strings.Join(words, " ")
+}
+
+func (cfg *apiConfig) handleGetChirps(res http.ResponseWriter, req *http.Request) {
+	chirps, err := cfg.db.GetChirps(req.Context())
+	if err != nil {
+		respondWithError(res, http.StatusInternalServerError, "unable to get chirps", nil)
+		return
+	}
+
+	response := []Chirp{}
+	for _, dbChirp := range chirps {
+		response = append(response, Chirp{
+			ID:        dbChirp.ID,
+			CreatedAt: dbChirp.CreatedAt,
+			UpdatedAt: dbChirp.UpdatedAt,
+			Body:      dbChirp.Body,
+			UserID:    dbChirp.UserID,
+		})
+	}
+	respondWithJSON(res, http.StatusOK, response)
 }
