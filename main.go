@@ -52,18 +52,22 @@ func main() {
 	serveMux := http.NewServeMux()
 	serveMux.Handle("/app/", apiCfg.middlewareMetricsInc(http.StripPrefix("/app", http.FileServer(http.Dir(filepathRoot)))))
 
+	serveMux.HandleFunc("POST /admin/reset", apiCfg.handleResetUsers)
+	serveMux.HandleFunc("GET /admin/metrics", apiCfg.handleNumberOfRequest)
+
 	serveMux.HandleFunc("GET /api/healthz", handleHealthCheck)
+	serveMux.HandleFunc("POST /api/login", apiCfg.handleLogin)
+	serveMux.HandleFunc("POST /api/refresh", apiCfg.handleRefresh)
+	serveMux.HandleFunc("POST /api/revoke", apiCfg.handleRevoke)
+	serveMux.HandleFunc("POST /api/polka/webhooks", apiCfg.handleUpgradeToChirpyRed)
+
 	serveMux.HandleFunc("GET /api/chirps", apiCfg.handleGetChirps)
 	serveMux.HandleFunc("GET /api/chirps/{chirpId}", apiCfg.handleGetChirpById)
 	serveMux.HandleFunc("DELETE /api/chirps/{chirpId}", apiCfg.handleDeleteChirpById)
 	serveMux.HandleFunc("POST /api/chirps", apiCfg.handleCreateChirp)
-	serveMux.HandleFunc("GET /admin/metrics", apiCfg.handleNumberOfRequest)
-	serveMux.HandleFunc("POST /admin/reset", apiCfg.handleResetUsers)
+
 	serveMux.HandleFunc("POST /api/users", apiCfg.handleCreateUsers)
 	serveMux.HandleFunc("PUT /api/users", apiCfg.handleUpdateUser)
-	serveMux.HandleFunc("POST /api/login", apiCfg.handleLogin)
-	serveMux.HandleFunc("POST /api/refresh", apiCfg.handleRefresh)
-	serveMux.HandleFunc("POST /api/revoke", apiCfg.handleRevoke)
 
 	server := http.Server{
 		Addr:    ":" + port,

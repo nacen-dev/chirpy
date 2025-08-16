@@ -3,6 +3,7 @@ package main
 import (
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"time"
 
@@ -12,10 +13,11 @@ import (
 )
 
 type User struct {
-	ID        uuid.UUID `json:"id"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
-	Email     string    `json:"email"`
+	ID          uuid.UUID `json:"id"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
+	Email       string    `json:"email"`
+	IsChirpyRed bool      `json:"is_chirpy_red"`
 }
 
 func (cfg *apiConfig) handleResetUsers(res http.ResponseWriter, req *http.Request) {
@@ -67,10 +69,11 @@ func (cfg *apiConfig) handleCreateUsers(res http.ResponseWriter, req *http.Reque
 
 	respondWithJSON(res, http.StatusCreated, userRegistrationResponse{
 		User: User{
-			ID:        user.ID,
-			CreatedAt: user.CreatedAt,
-			UpdatedAt: user.UpdatedAt,
-			Email:     user.Email,
+			ID:          user.ID,
+			CreatedAt:   user.CreatedAt,
+			UpdatedAt:   user.UpdatedAt,
+			Email:       user.Email,
+			IsChirpyRed: user.IsChirpyRed.Bool,
 		},
 	})
 }
@@ -118,10 +121,11 @@ func (cfg *apiConfig) handleLogin(res http.ResponseWriter, req *http.Request) {
 	respondWithJSON(res, http.StatusOK, response{
 		Token: accessToken,
 		User: User{
-			ID:        user.ID,
-			CreatedAt: user.CreatedAt,
-			UpdatedAt: user.UpdatedAt,
-			Email:     user.Email,
+			ID:          user.ID,
+			CreatedAt:   user.CreatedAt,
+			UpdatedAt:   user.UpdatedAt,
+			Email:       user.Email,
+			IsChirpyRed: user.IsChirpyRed.Bool,
 		},
 		RefreshToken: refreshToken,
 	})
@@ -176,9 +180,44 @@ func (cfg *apiConfig) handleUpdateUser(res http.ResponseWriter, req *http.Reques
 	}
 
 	respondWithJSON(res, http.StatusOK, User{
-		ID:        updatedUserData.ID,
-		CreatedAt: updatedUserData.CreatedAt,
-		UpdatedAt: updatedUserData.UpdatedAt,
-		Email:     updatedUserData.Email,
+		ID:          updatedUserData.ID,
+		CreatedAt:   updatedUserData.CreatedAt,
+		UpdatedAt:   updatedUserData.UpdatedAt,
+		Email:       updatedUserData.Email,
+		IsChirpyRed: updatedUserData.IsChirpyRed.Bool,
 	})
+}
+
+func (cfg *apiConfig) handleUpgradeToChirpyRed(res http.ResponseWriter, req *http.Request) {
+	type parameters struct {
+		Event string `json:"event"`
+		Data  struct {
+			UserId uuid.UUID `json:"user_id"`
+		}
+	}
+
+	decoder := json.NewDecoder(req.Body)
+	params := parameters{}
+	err := decoder.Decode(&params)
+	if err != nil {
+		respondWithError(res, http.StatusInternalServerError, "Couldn't decode parameters", err)
+		return
+	}
+
+	if params.Event != "user.upgraded" {
+		res.WriteHeader(http.StatusNoContent)
+		return
+	}
+
+	_, err = cfg.db.UpgradeUserToChirpyRed(req.Context(), params.Data.UserId)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			respondWithError(res, http.StatusNotFound, "Couldn't find user", err)
+			return
+		}
+		respondWithError(res, http.StatusInternalServerError, "Unable to upgrade the user", err)
+		return
+	}
+
+	res.WriteHeader(http.StatusNoContent)
 }
