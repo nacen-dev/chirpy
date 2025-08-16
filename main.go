@@ -16,6 +16,7 @@ type apiConfig struct {
 	fileserverHits atomic.Int32
 	db             *database.Queries
 	platform       string
+	jwtSecret      string
 }
 
 func main() {
@@ -37,10 +38,15 @@ func main() {
 	if platform == "" {
 		log.Fatal("PLATFORM must be set")
 	}
+	jwtSecret := os.Getenv("JWT_SECRET")
+	if jwtSecret == "" {
+		log.Fatal("JWT_SECRET must be set")
+	}
 	apiCfg := apiConfig{
 		fileserverHits: atomic.Int32{},
 		db:             dbQueries,
 		platform:       platform,
+		jwtSecret:      jwtSecret,
 	}
 
 	serveMux := http.NewServeMux()
@@ -49,10 +55,15 @@ func main() {
 	serveMux.HandleFunc("GET /api/healthz", handleHealthCheck)
 	serveMux.HandleFunc("GET /api/chirps", apiCfg.handleGetChirps)
 	serveMux.HandleFunc("GET /api/chirps/{chirpId}", apiCfg.handleGetChirpById)
+	serveMux.HandleFunc("DELETE /api/chirps/{chirpId}", apiCfg.handleDeleteChirpById)
 	serveMux.HandleFunc("POST /api/chirps", apiCfg.handleCreateChirp)
 	serveMux.HandleFunc("GET /admin/metrics", apiCfg.handleNumberOfRequest)
 	serveMux.HandleFunc("POST /admin/reset", apiCfg.handleResetUsers)
 	serveMux.HandleFunc("POST /api/users", apiCfg.handleCreateUsers)
+	serveMux.HandleFunc("PUT /api/users", apiCfg.handleUpdateUser)
+	serveMux.HandleFunc("POST /api/login", apiCfg.handleLogin)
+	serveMux.HandleFunc("POST /api/refresh", apiCfg.handleRefresh)
+	serveMux.HandleFunc("POST /api/revoke", apiCfg.handleRevoke)
 
 	server := http.Server{
 		Addr:    ":" + port,

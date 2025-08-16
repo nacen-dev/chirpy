@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/nacen-dev/chirpy/internal/auth"
 	"github.com/nacen-dev/chirpy/internal/database"
 )
 
@@ -20,25 +21,39 @@ type Chirp struct {
 
 func (cfg *apiConfig) handleCreateChirp(res http.ResponseWriter, req *http.Request) {
 	type parameters struct {
-		Body   string    `json:"body"`
-		UserId uuid.UUID `json:"user_id"`
+		Body string `json:"body"`
 	}
 
 	decoder := json.NewDecoder(req.Body)
 	params := parameters{}
 	err := decoder.Decode(&params)
+
 	if err != nil {
 		respondWithError(res, http.StatusInternalServerError, "Couldn't decode parameters", err)
 		return
 	}
 
+	token, err := auth.GetBearerToken(req.Header)
+	if err != nil {
+		respondWithError(res, http.StatusUnauthorized, "Unable to get bearer token", err)
+		return
+	}
+
+	userIdFromJWT, err := auth.ValidateJWT(token, cfg.jwtSecret)
+
+	if err != nil {
+		respondWithError(res, http.StatusUnauthorized, "Invalid jwt", err)
+		return
+	}
+
 	if !isChirpValid(params.Body) {
 		respondWithError(res, http.StatusBadRequest, "Chirp is too long", nil)
+		return
 	}
 
 	chirp, err := cfg.db.CreateChirp(req.Context(), database.CreateChirpParams{
 		Body:   params.Body,
-		UserID: params.UserId,
+		UserID: userIdFromJWT,
 	})
 
 	profaneWords := map[string]struct{}{
@@ -49,6 +64,7 @@ func (cfg *apiConfig) handleCreateChirp(res http.ResponseWriter, req *http.Reque
 
 	if err != nil {
 		respondWithError(res, http.StatusInternalServerError, "unable to create the chirp", nil)
+		return
 	}
 
 	respondWithJSON(res, http.StatusCreated, Chirp{
@@ -118,4 +134,43 @@ func (cfg *apiConfig) handleGetChirpById(res http.ResponseWriter, req *http.Requ
 		Body:      dbChirp.Body,
 		UserID:    dbChirp.UserID,
 	})
+}
+
+func (cfg *apiConfig) handleDeleteChirpById(res http.ResponseWriter, req *http.Request) {
+	chirpId, err := uuid.Parse(req.PathValue("chirpId"))
+	if err != nil {
+		respondWithError(res, http.StatusBadRequest, "Chirp Id is missing", err)
+		return
+	}
+
+	accessToken, err := auth.GetBearerToken(req.Header)
+	if err != nil {
+		respondWithError(res, http.StatusUnauthorized, "No token found", err)
+		return
+	}
+
+	userIdFromJWT, err := auth.ValidateJWT(accessToken, cfg.jwtSecret)
+
+	if err != nil {
+		respondWithError(res, http.StatusUnauthorized, "Invalid jwt", err)
+		return
+	}
+
+	chirp, err := cfg.db.GetChirpById(req.Context(), chirpId)
+	if err != nil {
+		respondWithError(res, http.StatusNotFound, "Chirp not found", err)
+		return
+	}
+
+	if chirp.UserID != userIdFromJWT {
+		respondWithError(res, http.StatusForbidden, "Unauthorized", err)
+		return
+	}
+
+	err = cfg.db.DeleteChirpById(req.Context(), chirp.ID)
+	if err != nil {
+		respondWithError(res, http.StatusInternalServerError, "Unable to delete chirp...", err)
+		return
+	}
+	res.WriteHeader(http.StatusNoContent)
 }
