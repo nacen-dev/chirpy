@@ -189,6 +189,17 @@ func (cfg *apiConfig) handleUpdateUser(res http.ResponseWriter, req *http.Reques
 }
 
 func (cfg *apiConfig) handleUpgradeToChirpyRed(res http.ResponseWriter, req *http.Request) {
+	polkaKey, err := auth.GetPolkaAPIKey(req.Header)
+	if err != nil {
+		respondWithError(res, http.StatusUnauthorized, "invalid api key", err)
+		return
+	}
+
+	if polkaKey != cfg.polkaAPIKey {
+		respondWithError(res, http.StatusUnauthorized, "api key provided does not match", err)
+		return
+	}
+
 	type parameters struct {
 		Event string `json:"event"`
 		Data  struct {
@@ -198,7 +209,7 @@ func (cfg *apiConfig) handleUpgradeToChirpyRed(res http.ResponseWriter, req *htt
 
 	decoder := json.NewDecoder(req.Body)
 	params := parameters{}
-	err := decoder.Decode(&params)
+	err = decoder.Decode(&params)
 	if err != nil {
 		respondWithError(res, http.StatusInternalServerError, "Couldn't decode parameters", err)
 		return

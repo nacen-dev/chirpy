@@ -95,9 +95,26 @@ func cleanProfaneWords(s string, profaneWords map[string]struct{}) string {
 }
 
 func (cfg *apiConfig) handleGetChirps(res http.ResponseWriter, req *http.Request) {
-	chirps, err := cfg.db.GetChirps(req.Context())
-	if err != nil {
-		respondWithError(res, http.StatusInternalServerError, "unable to get chirps", nil)
+	author_id := req.URL.Query().Get("author_id")
+	sortingOrder := req.URL.Query().Get("sort")
+	var parsed_author_id uuid.UUID
+	var err error
+
+	if author_id != "" {
+		parsed_author_id, err = uuid.Parse(author_id)
+		if err != nil {
+			respondWithError(res, http.StatusBadRequest, "Invalid author id", err)
+			return
+		}
+	}
+
+	chirps, chirpsError := cfg.db.GetChirps(req.Context(), database.GetChirpsParams{
+		AuthorID: parsed_author_id,
+		OrderBy:  sortingOrder,
+	})
+
+	if chirpsError != nil {
+		respondWithError(res, http.StatusInternalServerError, "Unable to get chirps", err)
 		return
 	}
 

@@ -10,8 +10,19 @@ VALUES (
 RETURNING *;
 
 -- name: GetChirps :many
-SELECT * FROM chirps
-ORDER BY created_at ASC;
+SELECT id, created_at, updated_at, body, user_id
+FROM chirps
+WHERE user_id = @author_id OR @author_id = '00000000-0000-0000-0000-000000000000'
+ORDER BY
+    CASE 
+        WHEN @order_by::text IS NULL 
+          OR @order_by::text = 'asc' 
+        THEN created_at 
+    END ASC,
+    CASE 
+        WHEN @order_by::text = 'desc' 
+        THEN created_at 
+    END DESC;
 
 -- name: GetChirpById :one
 SELECT * FROM chirps
